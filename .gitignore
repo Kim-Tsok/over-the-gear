@@ -5,4 +5,4 @@ logs
 *.log
 
 *.meta
-/TextMesh Pro/*
+./TextMesh Pro/
