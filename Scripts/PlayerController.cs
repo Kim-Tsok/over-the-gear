@@ -26,6 +26,18 @@ namespace TarodevController
         public AudioSource collectSound;
         public AudioSource gameOver;
 
+        [Header("Touch Controls")]
+        [SerializeField] private bool _touchControls = true;
+        [SerializeField] private bool _showTouchControlsInEditor;
+        private int _jumpFingerId = -1;
+        private bool _touchJumpDown;
+        private bool _touchJumpHeld;
+
+        private static void Vibrate()
+        {
+            if (Application.isMobilePlatform) Handheld.Vibrate();
+        }
+
         #region Interface
 
         public Vector2 FrameInput => _frameInput.Move;
@@ -47,6 +59,7 @@ namespace TarodevController
         private void Update()
         {
             _time += Time.deltaTime;
+            ReadTouchInput();
             GatherInput();
         }
 
@@ -54,6 +67,7 @@ namespace TarodevController
         {
             if (collision.gameObject.tag == "gear-teeth")
             {
+                Vibrate();
                 gameOver.Play();
                 SceneManager.LoadScene(SceneManager.GetActiveScene().name);
                 Time.timeScale = 1;
@@ -64,8 +78,8 @@ namespace TarodevController
         {
             _frameInput = new FrameInput
             {
-                JumpDown = Input.GetButtonDown("Jump") || Input.GetKeyDown(KeyCode.C),
-                JumpHeld = Input.GetButton("Jump") || Input.GetKey(KeyCode.C),
+                JumpDown = Input.GetButtonDown("Jump") || Input.GetKeyDown(KeyCode.C) || _touchJumpDown,
+                JumpHeld = Input.GetButton("Jump") || Input.GetKey(KeyCode.C) || _touchJumpHeld,
                 Move = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"))
             };
 
@@ -80,6 +94,50 @@ namespace TarodevController
                 _jumpToConsume = true;
                 _timeJumpWasPressed = _time;
             }
+        }
+
+        private void ReadTouchInput()
+        {
+            _touchJumpDown = false;
+            _touchJumpHeld = false;
+
+            if (!_touchControls || (!Application.isMobilePlatform && !_showTouchControlsInEditor))
+            {
+                _jumpFingerId = -1;
+                return;
+            }
+
+            bool jumpFingerFound = false;
+
+            for (var i = 0; i < Input.touchCount; i++)
+            {
+                var touch = Input.GetTouch(i);
+                var normalizedPosition = new Vector2(touch.position.x / Screen.width, touch.position.y / Screen.height);
+
+                if (_jumpFingerId == touch.fingerId || (_jumpFingerId == -1 &&
+                    touch.phase == TouchPhase.Began && normalizedPosition.x >= 0.5f && normalizedPosition.y < 0.6f))
+                {
+                    if (_jumpFingerId == -1) _jumpFingerId = touch.fingerId;
+                    jumpFingerFound = true;
+                    _touchJumpDown |= touch.phase == TouchPhase.Began;
+                    _touchJumpHeld |= touch.phase != TouchPhase.Ended && touch.phase != TouchPhase.Canceled;
+                }
+            }
+
+            if (!jumpFingerFound) _jumpFingerId = -1;
+        }
+
+        private void OnGUI()
+        {
+            if (!_touchControls || (!Application.isMobilePlatform && !_showTouchControlsInEditor)) return;
+
+            var jumpSize = Screen.height * 0.13f;
+            var jumpRect = new Rect(Screen.width * 0.8f - jumpSize * 0.5f, Screen.height * 0.8f - jumpSize * 0.5f,
+                jumpSize, jumpSize);
+            var oldColor = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, 0.22f);
+            GUI.Box(jumpRect, "JUMP");
+            GUI.color = oldColor;
         }
 
         private void FixedUpdate()
